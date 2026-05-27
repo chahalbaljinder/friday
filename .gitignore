@@ -1,0 +1,14 @@
+venv
+models
+events/__pycache__
+llm/__pycache__
+audio/__pycache__
+stt/__pycache__
+tts/__pycache__
+vad/__pycache__
+
+*.pyc
+*.pkl
+*.pth
+*.bin
+*.onnx
