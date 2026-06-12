@@ -42,8 +42,11 @@ class VoiceAgent:
         
         self._running = False
         self._llm_buffer = ""
+        self._setup_done = False
 
     async def _setup(self):
+        if self._setup_done:
+            return
         logger.info("loading_models")
         await self.vad_worker.load_model()
         self.stt_engine.load_model()
@@ -55,6 +58,7 @@ class VoiceAgent:
         self.event_bus.subscribe("STT_FINAL", self._on_stt_final)
         self.event_bus.subscribe("LLM_TOKEN", self._on_llm_token)
         self.event_bus.subscribe("LLM_COMPLETE", self._on_llm_complete)
+        self._setup_done = True
 
     async def _on_user_started_speaking(self, data):
         logger.info("user_speech_detected")

@@ -31,7 +31,7 @@ class LLMWorker:
         self.event_bus = event_bus
         self.client = client
         self.history: List[Dict[str, str]] = [
-            {"role": "system", "content": "You are a realtime conversational voice assistant. Speak naturally, keep responses concise, avoid markdown, and respond conversationally."}
+            {"role": "system", "content": "You are FRIDAY, a local voice assistant. Answer only the user's current message. Stay concise, relevant, and natural. If the user asks for action or conversation, respond directly to that text only. Avoid unrelated remarks, examples, or filler. Keep replies to 1-2 short sentences."}
         ]
 
     async def handle_user_message(self, text: str):
@@ -44,3 +44,4 @@ class LLMWorker:
             
         self.history.append({"role": "assistant", "content": full_response})
         await self.event_bus.emit("LLM_COMPLETE", full_response)
+        return full_response

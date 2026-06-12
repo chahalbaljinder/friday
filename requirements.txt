@@ -3,13 +3,13 @@ numpy<2.0.0
 librosa
 resampy
 onnxruntime
+torch
 faster-whisper
 openwakeword
 ollama
 kokoro-onnx<0.5.0
 pydantic
 pydantic-settings
-asyncio
 structlog
 rich
 typer
@@ -17,3 +17,7 @@ transitions
 playwright
 sentence-transformers
 python-dotenv
+requests
+tqdm
+fastapi
+uvicorn[standard]

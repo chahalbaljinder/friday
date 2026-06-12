@@ -1,5 +1,5 @@
 import asyncio
-from typing import Dict, List, Callable, Any
+from typing import Dict, List, Callable, Any, Optional
 import structlog
 
 logger = structlog.get_logger()

@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>FRIDAY — Light UI</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 20px; background: #f6f1ea; color: #1f2937; }
+      button, input { border-radius: 10px; border: 1px solid #d1d5db; }
+      button { margin-right: 8px; padding: 10px 14px; background: #111827; color: white; cursor: pointer; }
+      button:hover { background: #1f2937; }
+      button.secondary { background: #4b5563; }
+      button.secondary:hover { background: #374151; }
+      button.voice { background: #0f766e; }
+      button.voice:hover { background: #115e59; }
+      button.active { box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.18); }
+      input { width: 100%; padding: 12px; box-sizing: border-box; }
+      #log { width: 100%; height: 60vh; border: 1px solid #d1d5db; border-radius: 14px; padding: 12px; overflow:auto; white-space:pre-wrap; background: white; }
+      .meta { color: #6b7280; font-size: 0.92rem; }
+      .assistant { color: #0f766e; font-weight: 600; }
+      .user { color: #7c2d12; font-weight: 600; }
+      .row { margin-top: 12px; display:flex; gap:8px; max-width: 900px; flex-wrap: wrap; }
+    </style>
+  </head>
+  <body>
+    <h2>FRIDAY — Lightweight Control</h2>
+    <div class="meta">Use Talk for continuous conversation. Turn on live data for weather, general web facts, and local calendar lookup.</div>
+    <div>
+      <button id="start">Start Agent</button>
+      <button id="stop" class="secondary">Stop Agent</button>
+      <button id="talk" class="voice">Talk</button>
+      <button id="clear">Clear</button>
+    </div>
+    <div class="row">
+      <input id="prompt" type="text" placeholder="Type a message to FRIDAY and press Send" style="flex:1; padding:10px;" />
+      <button id="send">Send</button>
+    </div>
+    <div class="row" style="align-items:center; margin-top: 4px;">
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input id="useWeb" type="checkbox" style="width:auto;" />
+        Use live data for weather, web facts, and calendar
+      </label>
+    </div>
+    <h3>Realtime Log</h3>
+    <div id="log"></div>
+
+    <script>
+      const logEl = document.getElementById('log')
+      const talkButton = document.getElementById('talk')
+      function append(msg){
+        logEl.textContent += msg + '\n'
+        logEl.scrollTop = logEl.scrollHeight
+      }
+
+      let talking = false
+      let recognition = null
+      let restartTimer = null
+      let speaking = false
+
+      async function speak(text){
+        if (!('speechSynthesis' in window)) return
+        speaking = true
+        clearTimeout(restartTimer)
+        try { recognition && recognition.stop() } catch (e) {}
+        window.speechSynthesis.cancel()
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.rate = 1.02
+        utterance.pitch = 1.0
+        utterance.onend = () => {
+          speaking = false
+          if (talking) {
+            scheduleListen()
+          }
+        }
+        utterance.onerror = () => {
+          speaking = false
+          if (talking) {
+            scheduleListen()
+          }
+        }
+        window.speechSynthesis.speak(utterance)
+      }
+
+      async function sendPrompt(text){
+        const prompt = (text ?? document.getElementById('prompt').value).trim()
+        if (!prompt) return
+        document.getElementById('prompt').value = ''
+        append('[YOU] ' + prompt)
+        const useWeb = document.getElementById('useWeb').checked
+        const r = await fetch('/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({text: prompt, use_web: useWeb})
+        })
+        const j = await r.json()
+        if (j.reply) {
+          append('[FRIDAY] ' + j.reply)
+          await speak(j.reply)
+        }
+        append('[STATUS] ' + JSON.stringify(j))
+      }
+
+      document.getElementById('start').onclick = async () => {
+        const r = await fetch('/start', {method:'POST'})
+        const j = await r.json()
+        append('Start: ' + JSON.stringify(j))
+      }
+      document.getElementById('stop').onclick = async () => {
+        const r = await fetch('/stop', {method:'POST'})
+        const j = await r.json()
+        append('Stop: ' + JSON.stringify(j))
+      }
+      document.getElementById('clear').onclick = () => { logEl.textContent = '' }
+      document.getElementById('send').onclick = sendPrompt
+      document.getElementById('prompt').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') sendPrompt()
+      })
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+
+      function setTalkState(active) {
+        talking = active
+        talkButton.classList.toggle('active', active)
+        talkButton.textContent = active ? 'Talk On' : 'Talk'
+      }
+
+      function createRecognition(){
+        if (!SpeechRecognition) return null
+        const r = new SpeechRecognition()
+        r.lang = 'en-US'
+        r.interimResults = false
+        r.maxAlternatives = 1
+        r.continuous = false
+        r.onstart = () => append('[VOICE] Listening...')
+        r.onresult = async (event) => {
+          const text = event.results[0][0].transcript
+          append('[VOICE] ' + text)
+          speaking = true
+          clearTimeout(restartTimer)
+          await sendPrompt(text)
+          speaking = false
+        }
+        r.onerror = (event) => append('[VOICE ERROR] ' + event.error)
+        r.onend = () => {
+          append('[VOICE] Stopped')
+          if (talking) scheduleListen()
+        }
+        return r
+      }
+
+      function listenOnce(){
+        if (!SpeechRecognition) return
+        if (!recognition) recognition = createRecognition()
+        try {
+          recognition.start()
+        } catch (e) {
+          // already started or restarting too quickly
+        }
+      }
+
+      function scheduleListen(){
+        clearTimeout(restartTimer)
+        restartTimer = setTimeout(() => {
+          if (talking && !speaking && document.visibilityState === 'visible') listenOnce()
+        }, 700)
+      }
+
+      document.getElementById('talk').onclick = () => {
+        if (!SpeechRecognition) {
+          append('[VOICE ERROR] Speech recognition is not supported in this browser. Use Chrome or Edge.')
+          return
+        }
+        if (!talking) {
+          setTalkState(true)
+          listenOnce()
+        } else {
+          setTalkState(false)
+          clearTimeout(restartTimer)
+          try { recognition && recognition.stop() } catch (e) {}
+          window.speechSynthesis.cancel()
+          speaking = false
+          append('[VOICE] Continuous mode off')
+        }
+      }
+
+      const ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws')
+      ws.onopen = () => append('WebSocket connected')
+      ws.onmessage = (e) => {
+        try{
+          const d = JSON.parse(e.data)
+          if(d.type === 'STT_FINAL') append('[STT] '+d.text)
+          else if(d.type === 'USER_TEXT') append('[USER] '+d.text)
+          else if(d.type === 'LLM_TOKEN') append(d.token)
+          else if(d.type === 'LLM_COMPLETE') append('[FRIDAY] '+d.text)
+          else append(JSON.stringify(d))
+        }catch(err){ append('WS: '+e.data) }
+      }
+      ws.onclose = () => append('WebSocket disconnected')
+      ws.onerror = (e) => append('WebSocket error')
+
+      window.addEventListener('beforeunload', () => {
+        try { recognition && recognition.stop() } catch (e) {}
+        window.speechSynthesis.cancel()
+        speaking = false
+      })
+    </script>
+  </body>
+</html>
